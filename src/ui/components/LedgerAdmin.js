@@ -1,6 +1,11 @@
 // @flow
 
-import React, {useState, useMemo, type Node as ReactNode} from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  type Node as ReactNode,
+} from "react";
 import {makeStyles} from "@material-ui/core/styles";
 import ButtonGroup from "@material-ui/core/ButtonGroup";
 import {
@@ -10,6 +15,8 @@ import {
   FormControlLabel,
   List,
   TextField,
+  ListSubheader,
+  Divider,
 } from "@material-ui/core";
 import {useLedger} from "../utils/LedgerContext";
 import {useTableState} from "../../webutil/tableState";
@@ -17,6 +24,8 @@ import {IdentityMerger} from "./IdentityMerger";
 import {type Identity, type IdentityId} from "../../core/identity";
 import {AliasView} from "./AliasView";
 import {IdentityListItems} from "./IdentityListItems";
+
+import * as NullUtil from "../../util/null";
 
 const useStyles = makeStyles((theme) => {
   return {
@@ -61,6 +70,11 @@ const useStyles = makeStyles((theme) => {
     addEditPrompt: {
       margin: 0,
     },
+    listSubheader: {
+      display: "grid",
+      gridTemplateColumns: "auto auto",
+      justifyContent: "space-between",
+    },
   };
 });
 
@@ -71,11 +85,27 @@ export const LedgerAdmin = (): ReactNode => {
   const [nextIdentityName, setIdentityName] = useState<string>("");
   const [selectedId, setSelectedId] = useState<IdentityId | null>(null);
   const [promptString, setPromptString] = useState<string>("Add Identity:");
-  const [checkboxSelected, setCheckBoxSelected] = useState<boolean>(false);
   const accounts = useMemo(() => ledger.accounts().map((a) => a.identity), [
     ledger._latestTimestamp,
   ]);
   const accountsTableState = useTableState({data: accounts});
+
+  const isCheckedHash: Map<IdentityId, boolean> = useMemo(() => {
+    const isCheckedHash = new Map();
+    ledger.accounts().map(({identity, active}) => {
+      isCheckedHash.set(identity.id, active);
+    });
+    return isCheckedHash;
+  }, [ledger]);
+
+  const handleSingleCheck = useCallback(
+    (id: IdentityId, event: SyntheticInputEvent<HTMLInputElement>) => {
+      const checked = event.currentTarget.checked;
+      toggleIdentityActivation(id);
+
+      isCheckedHash.set(id, checked);
+    }
+  );
 
   const changeIdentityName = (event: SyntheticInputEvent<HTMLInputElement>) =>
     setIdentityName(event.currentTarget.value);
@@ -94,10 +124,8 @@ export const LedgerAdmin = (): ReactNode => {
     let nextLedger;
     if (ledger.account(id).active) {
       nextLedger = ledger.deactivate(id);
-      setCheckBoxSelected(false);
     } else {
       nextLedger = ledger.activate(id);
-      setCheckBoxSelected(true);
     }
     updateLedger(nextLedger);
   };
@@ -105,14 +133,12 @@ export const LedgerAdmin = (): ReactNode => {
   const resetIdentity = () => {
     setIdentityName("");
     setSelectedId(null);
-    setCheckBoxSelected(false);
     setPromptString("Add Identity: ");
   };
 
   const setActiveIdentity = (identity: Identity) => {
     setIdentityName(identity.name);
     setSelectedId(identity.id);
-    setCheckBoxSelected(ledger.account(identity.id).active);
     setPromptString("Update Identity: ");
   };
 
@@ -152,8 +178,8 @@ export const LedgerAdmin = (): ReactNode => {
             className={classes.checkboxElement}
             control={
               <Checkbox
-                checked={checkboxSelected}
-                onChange={() => toggleIdentityActivation(selectedId)}
+                onChange={(e) => handleSingleCheck(selectedId, e)}
+                checked={NullUtil.orElse(isCheckedHash.get(selectedId), false)}
                 name="active"
                 color="primary"
               />
@@ -199,10 +225,24 @@ export const LedgerAdmin = (): ReactNode => {
         />
       </div>
       <div className={classes.centerRow}>
-        <List fullWidth className={classes.identityList}>
+        <List
+          fullWidth
+          subheader={
+            <ListSubheader>
+              <div className={classes.listSubheader}>
+                <div>Participant</div>
+                <div>Active</div>
+              </div>
+            </ListSubheader>
+          }
+          className={classes.identityList}
+        >
+          <Divider />
           <IdentityListItems
             identities={accountsTableState.currentPage}
             onClick={(identity) => setActiveIdentity(identity)}
+            isCheckedHash={isCheckedHash}
+            onCheckbox={handleSingleCheck}
           />
         </List>
       </div>
