@@ -26,7 +26,7 @@ function fail(std, task: string, message: string = "") {
 }
 
 const loadCommand: Command = async (args, std) => {
-  let pluginsToLoad: PluginId[] = [];
+  let pluginsToLoad: string[] = [];
   const baseDir = process.cwd();
   const config = await loadInstanceConfig(baseDir);
   if (args.length === 0) {
@@ -38,14 +38,13 @@ const loadCommand: Command = async (args, std) => {
       );
     }
   } else {
-    for (const arg of args) {
-      const id = pluginIdParser.parseOrThrow(arg);
-      if (config.bundledPlugins.has(id)) {
-        pluginsToLoad.push(id);
+    for (const directory of args) {
+      if (config.bundledPlugins.has(directory)) {
+        pluginsToLoad.push(directory);
       } else {
         return die(
           std,
-          `can't find plugin ${id}; remember to use fully scoped name, as in sourcecred/github`
+          `can't find plugin ${directory}; remember to use fully scoped name, as in sourcecred/github`
         );
       }
     }
@@ -54,13 +53,13 @@ const loadCommand: Command = async (args, std) => {
   taskReporter.start("load");
   const failedPlugins = [];
   const loadPromises = [];
-  const cacheEmpty = new Map<PluginId, boolean>();
-  for (const name of pluginsToLoad) {
-    const plugin = NullUtil.get(config.bundledPlugins.get(name));
-    const task = `loading ${name}`;
+  const cacheEmpty = new Map<string, boolean>();
+  for (const directory of pluginsToLoad) {
+    const {plugin, type} = NullUtil.get(config.bundledPlugins.get(directory));
+    const task = `loading ${type}/${directory}`;
     taskReporter.start(task);
-    const dirContext = pluginDirectoryContext(baseDir, name);
-    const childTaskReporter = new ScopedTaskReporter(taskReporter, name);
+    const dirContext = pluginDirectoryContext(baseDir, directory);
+    const childTaskReporter = new ScopedTaskReporter(taskReporter, directory);
 
     const loadPlugin = () =>
       plugin
@@ -70,7 +69,7 @@ const loadCommand: Command = async (args, std) => {
     const endChildRunners = () => {
       // create static array of taskIds from activeTasks map
       Array.from(taskReporter.activeTasks.keys())
-        .filter((taskId) => taskId.startsWith(name))
+        .filter((taskId) => taskId.startsWith(directory))
         .forEach((taskId: string) => {
           taskReporter.finish(taskId);
           warn(std, taskId, "Parent task restarting. Retrying");
@@ -89,10 +88,10 @@ const loadCommand: Command = async (args, std) => {
       taskReporter.start(task);
     };
 
-    cacheEmpty.set(name, isDirEmpty(dirContext.cacheDirectory()));
+    cacheEmpty.set(directory, isDirEmpty(dirContext.cacheDirectory()));
     const loadWithPossibleRetry = loadPlugin()
       .catch((e) => {
-        if (!cacheEmpty.get(name)) {
+        if (!cacheEmpty.get(directory)) {
           // remove child runner entries
           endChildRunners();
           restartParentRunner(e);
@@ -103,8 +102,8 @@ const loadCommand: Command = async (args, std) => {
         throw e;
       })
       .catch((e) => {
-        fail(std, name, e);
-        failedPlugins.push(name);
+        fail(std, directory, e);
+        failedPlugins.push(directory);
       });
     loadPromises.push(loadWithPossibleRetry);
   }

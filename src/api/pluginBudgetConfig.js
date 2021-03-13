@@ -67,7 +67,7 @@ function upgradeRawPeriod(p: RawBudgetPeriod): BudgetPeriod {
 function upgrade(config: RawPluginBudgetConfig): Budget {
   const entries = Object.keys(config.plugins).map((key) => {
     const id = pluginIdFromString(key);
-    const plugin = bundledPlugins()[id];
+    const plugin = bundledPlugins()[id]();
     if (id == null) {
       throw new Error(`No available plugin with id ${id}`);
     }

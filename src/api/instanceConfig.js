@@ -6,7 +6,10 @@ import {bundledPlugins as getAllBundledPlugins} from "./bundledPlugins";
 import * as pluginId from "./pluginId";
 
 export type InstanceConfig = {|
-  +bundledPlugins: Map<pluginId.PluginId, Plugin>,
+  +bundledPlugins: Map<
+    string,
+    {|+plugin: Plugin, +type: pluginId.PluginId|}
+  >,
 |};
 
 type RawInstanceConfig = {|
@@ -14,22 +17,34 @@ type RawInstanceConfig = {|
   // implicit from the SourceCred version. This is a stopgap until we have
   // a plugin system that admits external, dynamically loaded
   // dependencies.
-  +bundledPlugins: $ReadOnlyArray<pluginId.PluginId>,
+  +bundledPlugins: $ReadOnlyArray<{|
+    +type: pluginId.PluginId,
+    +uniqueFolderName: string,
+  |}>,
 |};
 
 const rawParser: P.Parser<RawInstanceConfig> = P.object({
-  bundledPlugins: P.array(pluginId.parser),
+  bundledPlugins: P.array(
+    P.object({type: pluginId.parser, uniqueFolderName: P.string})
+  ),
 });
 
 function upgrade(raw: RawInstanceConfig): InstanceConfig {
+  const uniqueFolderNames = raw.bundledPlugins.map((x) => x.uniqueFolderName);
+  const anyDuplicate = uniqueFolderNames.find(
+    (x, index) => uniqueFolderNames.indexOf(x) !== index
+  );
+  if (anyDuplicate) {
+    throw new Error("duplicate folder name: " + anyDuplicate);
+  }
   const allBundledPlugins = getAllBundledPlugins();
   const bundledPlugins = new Map();
-  for (const id of raw.bundledPlugins) {
-    const plugin = allBundledPlugins[id];
+  for (const {type, uniqueFolderName} of raw.bundledPlugins) {
+    const plugin = allBundledPlugins[type]();
     if (plugin == null) {
-      throw new Error("bad bundled plugin: " + JSON.stringify(id));
+      throw new Error("bad bundled plugin: " + JSON.stringify(type));
     }
-    bundledPlugins.set(id, plugin);
+    bundledPlugins.set(uniqueFolderName, {plugin, type});
   }
   return {bundledPlugins};
 }

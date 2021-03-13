@@ -45,14 +45,9 @@ export function loadInstanceConfig(baseDir: string): Promise<InstanceConfig> {
 export function makePluginDir(
   baseDir: string,
   prefix: $ReadOnlyArray<string>,
-  pluginId: string
+  uniqueFolderName: string
 ): string {
-  const idParts = pluginId.split("/");
-  if (idParts.length !== 2) {
-    throw new Error(`Bad plugin name: ${pluginId}`);
-  }
-  const [pluginOwner, pluginName] = idParts;
-  const pathComponents = [...prefix, pluginOwner, pluginName];
+  const pathComponents = [...prefix, uniqueFolderName];
   let path = baseDir;
   for (const pc of pathComponents) {
     path = pathJoin(path, pc);
@@ -165,9 +160,9 @@ export async function loadAndMergePluginWeigtedGraphs(
   baseDir: string,
   config: InstanceConfig
 ): Promise<WeightedGraph> {
-  const pluginNames = Array.from(config.bundledPlugins.keys());
+  const plugins = Array.from(config.bundledPlugins.keys());
   const graphs = await Promise.all(
-    pluginNames.map((name) => loadWeightedGraphForPlugin(name, baseDir))
+    plugins.map((directory) => loadWeightedGraphForPlugin(directory, baseDir))
   );
   const combinedGraph = merge(graphs);
 

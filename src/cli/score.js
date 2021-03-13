@@ -37,8 +37,8 @@ const scoreCommand: Command = async (args, std) => {
     config
   );
 
-  const plugins = Array.from(config.bundledPlugins.values());
-  const declarations = plugins.map((x) => x.declaration());
+  const plugins = Array.from(config.bundledPlugins.entries());
+  const declarations = plugins.map(([dir, pluginInfo]) => pluginInfo.plugin.declaration());
 
   // TODO(@decentralion): This is snapshot tested, add unit tests?
   const paramsPath = pathJoin(baseDir, "config", "params.json");

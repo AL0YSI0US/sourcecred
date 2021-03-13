@@ -120,10 +120,10 @@ export class LocalInstance implements Instance {
 
   async readPluginGraphs(): Promise<Array<WeightedGraph>> {
     const instanceConfig = await this.readInstanceConfig();
-    const pluginNames = Array.from(instanceConfig.bundledPlugins.keys());
+    const plugins = Array.from(instanceConfig.bundledPlugins.values());
     return await Promise.all(
-      pluginNames.map(async (name) => {
-        const outputDir = this.createPluginDirectory(name);
+      plugins.map(async ({uniqueFolderName}) => {
+        const outputDir = this.createPluginDirectory(uniqueFolderName);
         const outputPath = pathJoin(outputDir, ...GRAPHS_PATH);
         const graphJSON = JSON.parse(await fs.readFile(outputPath));
         return weightedGraphFromJSON(graphJSON);
@@ -153,13 +153,8 @@ export class LocalInstance implements Instance {
     return loadJsonWithDefault(budgetPath, pluginBudgetParser, () => null);
   }
 
-  createPluginDirectory(pluginId: string): string {
-    const idParts = pluginId.split("/");
-    if (idParts.length !== 2) {
-      throw new Error(`Bad plugin name: ${pluginId}`);
-    }
-    const [pluginOwner, pluginName] = idParts;
-    const pathComponents = [...GRAPHS_DIRECTORY, pluginOwner, pluginName];
+  createPluginDirectory(uniqueFolderName: string): string {
+    const pathComponents = [...GRAPHS_DIRECTORY, uniqueFolderName];
     let path = this._baseDirectory;
     for (const pc of pathComponents) {
       path = pathJoin(path, pc);

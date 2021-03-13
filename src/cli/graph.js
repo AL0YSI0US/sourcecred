@@ -70,13 +70,13 @@ const graphCommand: Command = async (args, std) => {
     pluginsToLoad = config.bundledPlugins.keys();
   } else {
     for (const arg of processedArgs) {
-      const id = pluginId.fromString(arg);
-      if (config.bundledPlugins.has(id)) {
-        pluginsToLoad.push(id);
+      const directory = arg;
+      if (config.bundledPlugins.has(directory)) {
+        pluginsToLoad.push(directory);
       } else {
         return die(
           std,
-          `can't find plugin ${id}; remember to use fully scoped name, as in sourcecred/github`
+          `can't find plugin ${directory}; remember to use fully scoped name, as in sourcecred/github`
         );
       }
     }
@@ -90,11 +90,13 @@ const graphCommand: Command = async (args, std) => {
     taskReporter,
     ledger
   );
-  for (const name of pluginsToLoad) {
-    const generateGraphTask = `${name}: generating graph`;
+  for (const directory of pluginsToLoad) {
+    const {plugin, type} = NullUtil.get(
+      config.bundledPlugins.get(directory)
+    );
+    const generateGraphTask = `${type}/${directory}: generating graph`;
     taskReporter.start(generateGraphTask);
-    const plugin = NullUtil.get(config.bundledPlugins.get(name));
-    const dirContext = pluginDirectoryContext(baseDir, name);
+    const dirContext = pluginDirectoryContext(baseDir, directory);
     const weightedGraph = await plugin.graph(dirContext, rd, taskReporter);
 
     const identities = await plugin.identities(dirContext, taskReporter);
@@ -104,27 +106,31 @@ const graphCommand: Command = async (args, std) => {
     taskReporter.finish(generateGraphTask);
 
     if (shouldIncludeDiff) {
-      const diffTask = `${name}: diffing with existing graph`;
+      const diffTask = `${type}/${directory}: diffing with existing graph`;
       taskReporter.start(diffTask);
       try {
         const oldWeightedGraph = await loadWeightedGraphForPlugin(
-          name,
+          directory,
           baseDir
         );
-        computeAndLogDiff(oldWeightedGraph, weightedGraph, name);
+        computeAndLogDiff(oldWeightedGraph, weightedGraph, directory);
       } catch (error) {
         console.log(
-          `Could not find or compare existing graph.json for ${name}. ${error}`
+          `Could not find or compare existing graph.json for ${type}/${directory}. ${error}`
         );
       }
       taskReporter.finish(diffTask);
     }
 
     if (!isSimulation) {
-      const writeTask = `${name}: writing graph`;
+      const writeTask = `${type}/${directory}: writing graph`;
       taskReporter.start(writeTask);
       const serializedGraph = stringify(weightedGraphToJSON(weightedGraph));
-      const outputDir = makePluginDir(baseDir, graphOutputPrefix, name);
+      const outputDir = makePluginDir(
+        baseDir,
+        graphOutputPrefix,
+        directory
+      );
       const outputPath = pathJoin(outputDir, "graph.json");
       await fs.writeFile(outputPath, serializedGraph);
       taskReporter.finish(writeTask);
@@ -140,12 +146,13 @@ const graphCommand: Command = async (args, std) => {
 async function buildReferenceDetector(baseDir, config, taskReporter, ledger) {
   taskReporter.start("reference detector");
   const rds = [];
-  for (const [name, plugin] of sortBy(
+  for (const [directory, pluginInfo] of sortBy(
     [...config.bundledPlugins],
     ([k, _]) => k
   )) {
-    const dirContext = pluginDirectoryContext(baseDir, name);
-    const task = `reference detector for ${name}`;
+    const {plugin, type} = pluginInfo;
+    const dirContext = pluginDirectoryContext(baseDir, directory);
+    const task = `reference detector for ${type}/${directory}`;
     taskReporter.start(task);
     const rd = await plugin.referenceDetector(dirContext, taskReporter);
     rds.push(rd);
